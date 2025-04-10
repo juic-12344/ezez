@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <title>增肌飲食查詢</title>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore-compat.js"></script>
+  <style>
+    body { font-family: 'Arial', sans-serif; padding: 2rem; background-color: #f4f4f4; }
+    h1 { text-align: center; color: #2c3e50; }
+    .container { max-width: 800px; margin: 0 auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }
+    input, button { padding: 10px; font-size: 16px; width: 100%; margin-bottom: 15px; border-radius: 4px; border: 1px solid #ccc; }
+    button { background-color: #3498db; color: white; cursor: pointer; border: none; }
+    button:hover { background-color: #2980b9; }
+    #result { margin-top: 20px; padding: 10px; border-radius: 8px; background-color: #ecf0f1; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); }
+    .food-result { background-color: #ffffff; padding: 15px; margin: 10px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+    .food-result h3 { margin: 0; color: #3498db; }
+    .form-container { margin-top: 30px; background-color: #ecf0f1; padding: 20px; border-radius: 8px; }
+    .form-container input { width: calc(100% - 22px); margin-bottom: 10px; }
+    .form-container button { width: 100%; }
+    #todayLog { margin-top: 20px; }
+    #nutritionGap { margin-top: 20px; font-weight: bold; }
+    #suggestions { margin-top: 20px; padding: 15px; background-color: #d5f4e6; border-radius: 8px; }
+    #suggestions h3 { color: #27ae60; }
+  </style>
+</head>
+<body>
+
+  <h1>💪 增肌飲食紀錄</h1>
+
+  <div class="container">
+    <!-- 查詢食物 -->
+    <input type="text" id="foodInput" placeholder="輸入食物名稱">
+    <button onclick="searchFood()">查詢食物</button>
+
+    <div id="result"></div>
+
+    <!-- 記錄今天吃的食物 -->
+    <div class="form-container">
+      <h2>記錄今天吃的食物</h2>
+      <div id="foodList"></div> <!-- 顯示食物選擇列表 -->
+      
+
+      <div id="todayLog"></div>
+    </div>
+
+    <!-- 顯示營養缺口 -->
+    <div id="nutritionGap"></div>
+
+    <!-- 顯示建議 -->
+    <div id="suggestions">
+      <h3>飲食建議</h3>
+      <p>根據你的今日飲食紀錄，這是你的建議：</p>
+      <div id="suggestionsList"></div>
+    </div>
+  </div>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyBjNxuvprAQhZIBh5GZut1IQ2SnwEo9KIs",
+      authDomain: "food-991cc.firebaseapp.com",
+      projectId: "food-991cc",
+      storageBucket: "food-991cc.firebasestorage.app",
+      messagingSenderId: "821021452028",
+      appId: "1:821021452028:web:ebf495b1a3753026d0d979",
+      measurementId: "G-RTEVZXDTHY"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.firestore();
+
+    let totalCalories = 0;
+    let totalProtein = 0;
+    let totalCarbs = 0;
+    let totalFat = 0;
+
+    let selectedFoods = []; // 儲存已選擇的食物及其重量
+
+    // 查詢食物
+    async function searchFood() {
+      const name = document.getElementById("foodInput").value.trim();
+      const resultDiv = document.getElementById("result");
+      resultDiv.innerHTML = "查詢中...";
+
+      try {
+        const query = await db.collection("foods").where("name", "==", name).get();
+        if (query.empty) {
+          resultDiv.innerHTML = "找不到這個食物。";
+          return;
+        }
+
+        const data = query.docs[0].data();
+        resultDiv.innerHTML = `
+          <div class="food-result">
+            <h3>${data.name}</h3>
+            <p>熱量：${data.calories} kcal</p>
+            <p>蛋白質：${data.protein} g</p>
+            <p>碳水：${data.carbs} g</p>
+            <p>脂肪：${data.fat} g</p>
+          </div>
+        `;
+
+        // 顯示食物選擇列表
+        displayFoodList(data);
+
+      } catch (err) {
+        resultDiv.innerHTML = "錯誤：" + err.message;
+      }
+    }
+
+    // 顯示食物選擇列表
+    function displayFoodList(food) {
+      const foodListDiv = document.getElementById("foodList");
+      foodListDiv.innerHTML = `
+        <div>
+          <label for="foodAmount">重量 (克)：</label>
+          <input type="number" id="foodAmount" min="1" placeholder="輸入食物的克數" />
+          <button onclick="addFoodToLog('${food.name}', ${food.calories}, ${food.protein}, ${food.carbs}, ${food.fat})">添加食物</button>
+        </div>
+      `;
+    }
+
+    // 記錄選擇的食物
+    function addFoodToLog(name, calories, protein, carbs, fat) {
+      const amount = document.getElementById("foodAmount").value;
+      if (!amount || amount <= 0) {
+        alert("請輸入有效的克數！");
+        return;
+      }
+
+      // 計算根據克數的營養數據
+      const amountFactor = amount / 100; // 以每100克為基準
+      const foodCalories = calories * amountFactor;
+      const foodProtein = protein * amountFactor;
+      const foodCarbs = carbs * amountFactor;
+      const foodFat = fat * amountFactor;
+
+      selectedFoods.push({ name, amount, foodCalories, foodProtein, foodCarbs, foodFat });
+
+      // 更新總營養數據
+      totalCalories += foodCalories;
+      totalProtein += foodProtein;
+      totalCarbs += foodCarbs;
+      totalFat += foodFat;
+
+      // 顯示今日食物
+      updateTodayLog();
+      updateNutritionGap();
+      giveSuggestions();
+    }
+
+    // 更新今日食物清單
+    function updateTodayLog() {
+      const todayLogDiv = document.getElementById("todayLog");
+      let logContent = "<h3>今天吃了：</h3>";
+
+      selectedFoods.forEach(food => {
+        logContent += `
+          <p>${food.name} (${food.amount} 克) - 熱量: ${food.foodCalories.toFixed(2)} kcal, 蛋白質: ${food.foodProtein.toFixed(2)} g, 碳水: ${food.foodCarbs.toFixed(2)} g, 脂肪: ${food.foodFat.toFixed(2)} g</p>
+        `;
+      });
+
+      todayLogDiv.innerHTML = logContent;
+    }
+
+    // 顯示營養缺口
+    function updateNutritionGap() {
+      const targetCalories = 3000;
+      const targetProtein = 150;
+      const targetCarbs = 400;
+      const targetFat = 100;
+
+      const gapCalories = targetCalories - totalCalories;
+      const gapProtein = targetProtein - totalProtein;
+      const gapCarbs = targetCarbs - totalCarbs;
+      const gapFat = targetFat - totalFat;
+
+      const nutritionGapDiv = document.getElementById("nutritionGap");
+      nutritionGapDiv.innerHTML = `
+        <p>剩餘熱量：${gapCalories.toFixed(2)} kcal</p>
+        <p>剩餘蛋白質：${gapProtein.toFixed(2)} g</p>
+        <p>剩餘碳水：${gapCarbs.toFixed(2)} g</p>
+        <p>剩餘脂肪：${gapFat.toFixed(2)} g</p>
+      `;
+    }
+
+    // 顯示飲食建議
+    function giveSuggestions() {
+      let suggestions = [];
+      
+      if (totalProtein < 150) {
+        suggestions.push("今天蛋白質攝取不足，建議增加蛋白質食物如雞胸肉、蛋白粉等。");
+      }
+      if (totalCarbs > 400) {
+        suggestions.push("今天碳水攝取過多，建議減少碳水來源如米飯、麵食等。");
+      }
+      if (totalFat < 100) {
+        suggestions.push("今天脂肪攝取不足，建議增加健康脂肪如牛油果、橄欖油等。");
+      }
+
+      const suggestionsList = document.getElementById("suggestionsList");
+      suggestionsList.innerHTML = suggestions.length ? suggestions.join('<br>') : "你的飲食今天很棒，保持這樣！";
+    }
+  </script>
+
+</body>
+</html>
+
+
+
+
